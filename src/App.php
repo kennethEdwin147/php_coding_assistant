@@ -5,6 +5,7 @@ namespace AssistantPhp;
 class App
 {
     private CLI $cli;
+    private OllamaService $ollama;  // ← AJOUTER CETTE LIGNE
     private array $config;
     
     public function __construct()

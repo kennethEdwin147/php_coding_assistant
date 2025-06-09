@@ -123,13 +123,35 @@ class CLI
 
             case 'models':
                 $this->showModels();
-                break;  
+                break; 
+        
+            case 'create':
+                $this->handleCreate($args);
+                break;
+                
+            case 'edit':
+                $this->handleEdit($args);
+                break;
+                
+            case 'analyze':
+                $this->handleAnalyze($args);
+                break;
+                
+            case 'generate-tests':
+                $this->handleGenerateTests($args);
+                break;
                 
             case 'exit':
                 
             default:
+                   // Si ce n'est pas une commande reconnue, traiter comme une question
+            if (!empty($input)) {
+                $this->handleAsk($input);
+            } else {
                 $this->climate->error("❌ Commande inconnue: {$command}");
                 $this->climate->dim()->out('Tapez "help" pour voir les commandes disponibles');
+            }
+            break;
         }
     }
     
@@ -148,6 +170,9 @@ class CLI
             'cd <path>' => 'Changer de répertoire',
             'exit' => 'Quitter l\'application',
             'models' => 'Lister les modèles Ollama disponibles',
+            'create "instruction"' => 'Créer un fichier avec l\'IA',
+            'edit "file" "instruction"' => 'Modifier un fichier existant',
+            'analyze-file "file"' => 'Analyser un fichier et suggérer des améliorations',
         ];
         
         foreach ($commands as $cmd => $desc) {
@@ -371,5 +396,130 @@ class CLI
         if (file_exists($this->currentPath . '/wp-config.php')) return 'WordPress';
         return null;
     }
+
+    /**
+ * Créer un fichier avec l'IA
+ */
+private function handleCreate(string $instruction): void
+{
+    if (empty($instruction)) {
+        $this->climate->error('❌ Usage: create "instruction"');
+        $this->climate->dim()->out('Exemple: create "UserController with CRUD methods"');
+        return;
+    }
+    
+    $this->climate->out('');
+    $this->climate->blue()->out('🔨 Création en cours...');
+    $this->climate->yellow()->inline('🤖 Le LLM génère le code');
+    
+    try {
+        // Initialiser les services
+        $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
+        $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
+        $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+        
+        $result = $codeGenerator->createFile($instruction);
+        
+        $this->climate->out("\r" . str_repeat(' ', 50) . "\r");
+        
+        if ($result['success']) {
+            $this->climate->green()->out('✅ Fichier créé avec succès !');
+            $this->climate->white()->out('📁 ' . $result['file_created']);
+        } else {
+            $this->climate->error('❌ Erreur: ' . $result['error']);
+        }
+        
+    } catch (\Exception $e) {
+        $this->climate->out('');
+        $this->climate->error('❌ Erreur: ' . $e->getMessage());
+    }
+    
+    $this->climate->out('');
+}
+
+/**
+ * Modifier un fichier existant
+ */
+private function handleEdit(string $args): void
+{
+    $parts = explode(' ', $args, 2);
+    
+    if (count($parts) < 2) {
+        $this->climate->error('❌ Usage: edit "fichier.php" "instruction"');
+        $this->climate->dim()->out('Exemple: edit "app/Models/User.php" "add email validation"');
+        return;
+    }
+    
+    $filePath = trim($parts[0], '"');
+    $instruction = trim($parts[1], '"');
+    
+    $this->climate->out('');
+    $this->climate->blue()->out('✏️  Modification en cours...');
+    $this->climate->yellow()->inline('🤖 Le LLM modifie le code');
+    
+    try {
+        $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
+        $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
+        $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+        
+        $result = $codeGenerator->editFile($filePath, $instruction);
+        
+        $this->climate->out("\r" . str_repeat(' ', 50) . "\r");
+        
+        if ($result['success']) {
+            $this->climate->green()->out('✅ Fichier modifié avec succès !');
+            $this->climate->white()->out('📁 ' . $result['file_modified']);
+            $this->climate->dim()->out('💾 Backup: ' . $result['backup_created']);
+        } else {
+            $this->climate->error('❌ Erreur: ' . $result['error']);
+        }
+        
+    } catch (\Exception $e) {
+        $this->climate->out('');
+        $this->climate->error('❌ Erreur: ' . $e->getMessage());
+    }
+    
+    $this->climate->out('');
+}
+
+/**
+ * Analyser un fichier
+ */
+private function handleAnalyzeFile(string $filePath): void
+{
+    if (empty($filePath)) {
+        $this->climate->error('❌ Usage: analyze-file "fichier.php"');
+        $this->climate->dim()->out('Exemple: analyze-file "app/Http/Controllers/UserController.php"');
+        return;
+    }
+    
+    $filePath = trim($filePath, '"');
+    
+    $this->climate->out('');
+    $this->climate->blue()->out('🔍 Analyse en cours...');
+    
+    try {
+        $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
+        $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
+        $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+        
+        $result = $codeGenerator->analyzeFile($filePath);
+        
+        if ($result['success']) {
+            $this->climate->green()->out('✅ Analyse terminée !');
+            $this->climate->white()->out('📁 ' . $result['file']);
+            $this->climate->out('');
+            $this->climate->yellow()->out('💡 Suggestions:');
+            $this->climate->white()->out($result['suggestions']);
+        } else {
+            $this->climate->error('❌ Erreur: ' . $result['error']);
+        }
+        
+    } catch (\Exception $e) {
+        $this->climate->error('❌ Erreur: ' . $e->getMessage());
+    }
+    
+    $this->climate->out('');
+}
 
 }
