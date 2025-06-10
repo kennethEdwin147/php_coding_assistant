@@ -2,6 +2,8 @@
 
 namespace AssistantPhp\Services;
 
+use AssistantPhp\OllamaService;
+
 class CodeGenerator
 {
     private ProjectAnalyzer $analyzer;
@@ -41,7 +43,7 @@ class CodeGenerator
     /**
      * Analyser un fichier et suggérer des améliorations
      */
-    public function analyzeAndSuggest(string $filePath): array
+    public function analyzeFile(string $filePath): array
     {
         $fileContext = $this->analyzer->getFileContext($filePath);
         
