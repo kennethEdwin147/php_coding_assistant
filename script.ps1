@@ -1,9 +1,11 @@
 # 1. Créer le dossier global
-mkdir C:\Tools\AssistantPHP
-copy .\* C:\Tools\AssistantPHP\
+# Copier TOUT vers le dossier global
+robocopy . C:\Tools\AssistantPHP /E /XD .git node_modules
 
-# 2. Ajouter au PATH (interface graphique)
-# Win+R → sysdm.cpl → Avancé → Variables → Path → Nouveau → C:\Tools\AssistantPHP
+# Aller dans le dossier global et réinstaller
+cd C:\Tools\AssistantPHP
+composer install
+
 
 composer install
 
