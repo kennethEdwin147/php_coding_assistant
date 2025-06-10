@@ -11,7 +11,6 @@ class ProjectAnalyzer
         $this->projectPath = $projectPath;
     }
 
-
     /**
      * Construire un prompt avec contexte pour le LLM
      */
@@ -111,6 +110,21 @@ class ProjectAnalyzer
     }
     
     /**
+     * Version du framework
+     */
+    private function getFrameworkVersion(?string $framework): ?string
+    {
+        if ($framework === 'Laravel') {
+            $composerPath = $this->projectPath . '/composer.json';
+            if (file_exists($composerPath)) {
+                $composer = json_decode(file_get_contents($composerPath), true);
+                return $composer['require']['laravel/framework'] ?? 'unknown';
+            }
+        }
+        return null;
+    }
+    
+    /**
      * Compter les fichiers PHP
      */
     public function countPhpFiles(): int
@@ -187,5 +201,32 @@ class ProjectAnalyzer
         }
         
         return $patterns;
+    }
+    
+    /**
+     * Extraire les classes d'un fichier PHP
+     */
+    private function extractClasses(string $content): array
+    {
+        preg_match_all('/class\s+(\w+)/', $content, $matches);
+        return $matches[1] ?? [];
+    }
+    
+    /**
+     * Extraire les méthodes d'un fichier PHP
+     */
+    private function extractMethods(string $content): array
+    {
+        preg_match_all('/(?:public|private|protected)\s+function\s+(\w+)/', $content, $matches);
+        return $matches[1] ?? [];
+    }
+    
+    /**
+     * Extraire le namespace d'un fichier PHP
+     */
+    private function extractNamespace(string $content): ?string
+    {
+        preg_match('/namespace\s+([^;]+);/', $content, $matches);
+        return $matches[1] ?? null;
     }
 }

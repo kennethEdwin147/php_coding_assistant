@@ -13,7 +13,7 @@ return [
     'ollama' => [
         'host' => $secrets['ollama_host'] ?? 'http://localhost:11434',  // ← Fallback local
         'model' => 'qwen2.5-coder:3b',
-        'timeout' => 30,
+        'timeout' => 120,
         'temperature' => 0.3,
         'max_tokens' => 3000,
     ],
