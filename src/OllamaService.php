@@ -95,6 +95,9 @@ class OllamaService
         }
         
         $prompt = $this->buildPrompt($question, $context);
+
+          // AJOUTER CETTE LIGNE :
+            $this->logPrompt($prompt);
         
         $data = [
             'model' => $this->model,
@@ -142,12 +145,18 @@ class OllamaService
         }
     }
     
+
     /**
      * Construire le prompt avec contexte
      */
     private function buildPrompt(string $question, array $context): string
     {
-        $prompt = "Tu es un assistant PHP expert et concis.\n\n";
+        $prompt = "Tu es un développeur full-stack expert. Tu maîtrises:\n";
+        $prompt .= "- PHP (Laravel, Symfony, vanilla)\n";
+        $prompt .= "- JavaScript (vanilla, frameworks)\n";
+        $prompt .= "- HTML/CSS (Tailwind, Bootstrap)\n";
+        $prompt .= "- Blade templates Laravel\n";
+        $prompt .= "- SQL et bases de données\n\n";
         
         // Ajouter le contexte si disponible
         if (!empty($context['framework'])) {
@@ -158,16 +167,18 @@ class OllamaService
             $prompt .= "DOSSIER: " . basename($context['project_path']) . "\n";
         }
         
-        if (!empty($context['recent_files'])) {
-            $prompt .= "FICHIERS RÉCENTS: " . implode(', ', $context['recent_files']) . "\n";
-        }
+        $prompt .= "\nRÈGLES:\n";
+        $prompt .= "- Donne du code seulement si la question le demande\n";
+        $prompt .= "- Pour les questions générales, réponds naturellement\n";
+        $prompt .= "- Adapte le langage selon la question (PHP, JS, CSS, etc.)\n";
+        $prompt .= "- Sois concis mais complet\n";
+        $prompt .= "- Donne des exemples pratiques\n\n";
         
-        $prompt .= "\nRègle: Réponds de manière concise et pratique. Donne des exemples de code si pertinent.\n";
         $prompt .= "Question: $question\n\nRéponse:";
         
         return $prompt;
     }
-    
+        
     /**
      * Lister les modèles disponibles
      */
@@ -259,4 +270,18 @@ class OllamaService
             'timeout' => $this->config['timeout'] ?? 30
         ];
     }
-}
+
+    /**
+     * Logger le prompt pour debug
+     */
+    private function logPrompt(string $prompt): void
+    {
+        $logFile = __DIR__ . '/../storage/prompt_log.txt';
+        $timestamp = date('Y-m-d H:i:s');
+        $logContent = "\n=== PROMPT ENVOYÉ LE $timestamp ===\n";
+        $logContent .= $prompt;
+        $logContent .= "\n=== FIN PROMPT ===\n\n";
+        
+        file_put_contents($logFile, $logContent, FILE_APPEND);
+    }
+    }

@@ -58,23 +58,24 @@ class CLI
     }
     
     private function runInteractiveMode(): void
-{
-    while (true) {
-        // Afficher le prompt manuellement
-        $this->climate->inline(basename($this->currentPath) . ' > ');
-        
-        // Lire l'input avec fgets
-        $input = trim(fgets(STDIN));
-        
-        if ($this->shouldExit($input)) {
-            $this->climate->green()->out('👋 Au revoir !');
-            break;
+    {
+        while (true) {
+            // Afficher le prompt manuellement
+            $this->climate->inline(basename($this->currentPath) . ' > ');
+            
+            // Lire l'input avec fgets
+            $input = trim(fgets(STDIN));
+            
+            if ($this->shouldExit($input)) {
+                $this->climate->green()->out('👋 Au revoir !');
+                break;
+            }
+            
+            $this->processCommand($input);
         }
-        
-        $this->processCommand($input);
     }
-}
     
+
     private function processCommand(string $input): void
     {
         $input = trim($input);
@@ -87,71 +88,59 @@ class CLI
         $command = strtolower($parts[0]);
         $args = $parts[1] ?? '';
         
-        switch ($command) {
-            case 'help':
-                $this->showHelp();
-                break;
-                
-            case 'version':
-                $this->showVersion();
-                break;
-                
-            case 'status':
-                $this->showStatus();
-                break;
-                
-            case 'clear':
-                $this->climate->clear();
-                $this->showWelcome();
-                break;
-                
-            case 'pwd':
-                $this->climate->white()->out($this->currentPath);
-                break;
-                
-            case 'cd':
-                $this->changeDirectory($args);
-                break;
-
-            case 'ask':
-                $this->handleAsk($args);
-                break;
-            
-            case 'test-ollama':
-                $this->testOllama();
-                break;
-
-            case 'models':
-                $this->showModels();
-                break; 
+        // Commandes système spécifiques
+        $systemCommands = ['help', 'status', 'cd', 'scan', 'exit', 'quit', 'q', 
+                        'clear', 'pwd', 'version', 'test-ollama', 'models'];
         
-            case 'create':
-                $this->handleCreate($args);
-                break;
-                
-            case 'edit':
-                $this->handleEdit($args);
-                break;
-                
-            case 'analyze':
-                $this->handleAnalyze($args);
-                break;
-                
-            case 'generate-tests':
-                $this->handleGenerateTests($args);
-                break;
-                
-            case 'exit':
-                
-            default:
-                   // Si ce n'est pas une commande reconnue, traiter comme une question
-            if (!empty($input)) {
-                $this->handleAsk($input);
-            } else {
-                $this->climate->error("❌ Commande inconnue: {$command}");
-                $this->climate->dim()->out('Tapez "help" pour voir les commandes disponibles');
+        if (in_array($command, $systemCommands)) {
+            // Traiter les commandes système
+            switch ($command) {
+                case 'help':
+                    $this->showHelp();
+                    break;
+                    
+                case 'version':
+                    $this->showVersion();
+                    break;
+                    
+                case 'status':
+                    $this->showStatus();
+                    break;
+                    
+                case 'clear':
+                    $this->climate->clear();
+                    $this->showWelcome();
+                    break;
+                    
+                case 'pwd':
+                    $this->climate->white()->out($this->currentPath);
+                    break;
+                    
+                case 'cd':
+                    $this->changeDirectory($args);
+                    break;
+                    
+                case 'test-ollama':
+                    $this->testOllama();
+                    break;
+                    
+                case 'models':
+                    $this->showModels();
+                    break;
+                    
+                case 'scan':
+                    $this->scanProject();
+                    break;
+                    
+                case 'exit':
+                case 'quit':
+                case 'q':
+                    // Cette logique est gérée dans shouldExit()
+                    break;
             }
-            break;
+        } else {
+            // Tout le reste = question directe à l'IA
+            $this->handleAsk($input);  // Passer tout l'input, pas juste les args
         }
     }
     
@@ -398,128 +387,224 @@ class CLI
     }
 
     /**
- * Créer un fichier avec l'IA
- */
-private function handleCreate(string $instruction): void
-{
-    if (empty($instruction)) {
-        $this->climate->error('❌ Usage: create "instruction"');
-        $this->climate->dim()->out('Exemple: create "UserController with CRUD methods"');
-        return;
-    }
-    
-    $this->climate->out('');
-    $this->climate->blue()->out('🔨 Création en cours...');
-    $this->climate->yellow()->inline('🤖 Le LLM génère le code');
-    
-    try {
-        // Initialiser les services
-        $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
-        $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
-        $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
-        
-        $result = $codeGenerator->createFile($instruction);
-        
-        $this->climate->out("\r" . str_repeat(' ', 50) . "\r");
-        
-        if ($result['success']) {
-            $this->climate->green()->out('✅ Fichier créé avec succès !');
-            $this->climate->white()->out('📁 ' . $result['file_created']);
-        } else {
-            $this->climate->error('❌ Erreur: ' . $result['error']);
+     * Créer un fichier avec l'IA
+     */
+    private function handleCreate(string $instruction): void
+    {
+        if (empty($instruction)) {
+            $this->climate->error('❌ Usage: create "instruction"');
+            $this->climate->dim()->out('Exemple: create "UserController with CRUD methods"');
+            return;
         }
         
-    } catch (\Exception $e) {
         $this->climate->out('');
-        $this->climate->error('❌ Erreur: ' . $e->getMessage());
-    }
-    
-    $this->climate->out('');
-}
-
-/**
- * Modifier un fichier existant
- */
-private function handleEdit(string $args): void
-{
-    $parts = explode(' ', $args, 2);
-    
-    if (count($parts) < 2) {
-        $this->climate->error('❌ Usage: edit "fichier.php" "instruction"');
-        $this->climate->dim()->out('Exemple: edit "app/Models/User.php" "add email validation"');
-        return;
-    }
-    
-    $filePath = trim($parts[0], '"');
-    $instruction = trim($parts[1], '"');
-    
-    $this->climate->out('');
-    $this->climate->blue()->out('✏️  Modification en cours...');
-    $this->climate->yellow()->inline('🤖 Le LLM modifie le code');
-    
-    try {
-        $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
-        $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
-        $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+        $this->climate->blue()->out('🔨 Création en cours...');
+        $this->climate->yellow()->inline('🤖 Le LLM génère le code');
         
-        $result = $codeGenerator->editFile($filePath, $instruction);
-        
-        $this->climate->out("\r" . str_repeat(' ', 50) . "\r");
-        
-        if ($result['success']) {
-            $this->climate->green()->out('✅ Fichier modifié avec succès !');
-            $this->climate->white()->out('📁 ' . $result['file_modified']);
-            $this->climate->dim()->out('💾 Backup: ' . $result['backup_created']);
-        } else {
-            $this->climate->error('❌ Erreur: ' . $result['error']);
-        }
-        
-    } catch (\Exception $e) {
-        $this->climate->out('');
-        $this->climate->error('❌ Erreur: ' . $e->getMessage());
-    }
-    
-    $this->climate->out('');
-}
-
-/**
- * Analyser un fichier
- */
-private function handleAnalyzeFile(string $filePath): void
-{
-    if (empty($filePath)) {
-        $this->climate->error('❌ Usage: analyze-file "fichier.php"');
-        $this->climate->dim()->out('Exemple: analyze-file "app/Http/Controllers/UserController.php"');
-        return;
-    }
-    
-    $filePath = trim($filePath, '"');
-    
-    $this->climate->out('');
-    $this->climate->blue()->out('🔍 Analyse en cours...');
-    
-    try {
-        $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
-        $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
-        $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
-        
-        $result = $codeGenerator->analyzeFile($filePath);
-        
-        if ($result['success']) {
-            $this->climate->green()->out('✅ Analyse terminée !');
-            $this->climate->white()->out('📁 ' . $result['file']);
+        try {
+            // Initialiser les services
+            $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
+            $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
+            $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+            
+            $result = $codeGenerator->createFile($instruction);
+            
+            $this->climate->out("\r" . str_repeat(' ', 50) . "\r");
+            
+            if ($result['success']) {
+                $this->climate->green()->out('✅ Fichier créé avec succès !');
+                $this->climate->white()->out('📁 ' . $result['file_created']);
+            } else {
+                $this->climate->error('❌ Erreur: ' . $result['error']);
+            }
+            
+        } catch (\Exception $e) {
             $this->climate->out('');
-            $this->climate->yellow()->out('💡 Suggestions:');
-            $this->climate->white()->out($result['suggestions']);
-        } else {
-            $this->climate->error('❌ Erreur: ' . $result['error']);
+            $this->climate->error('❌ Erreur: ' . $e->getMessage());
         }
         
-    } catch (\Exception $e) {
-        $this->climate->error('❌ Erreur: ' . $e->getMessage());
+        $this->climate->out('');
+    }
+
+    /**
+     * Modifier un fichier existant
+     */
+    private function handleEdit(string $args): void
+    {
+        $parts = explode(' ', $args, 2);
+        
+        if (count($parts) < 2) {
+            $this->climate->error('❌ Usage: edit "fichier.php" "instruction"');
+            $this->climate->dim()->out('Exemple: edit "app/Models/User.php" "add email validation"');
+            return;
+        }
+        
+        $filePath = trim($parts[0], '"');
+        $instruction = trim($parts[1], '"');
+        
+        $this->climate->out('');
+        $this->climate->blue()->out('✏️  Modification en cours...');
+        $this->climate->yellow()->inline('🤖 Le LLM modifie le code');
+        
+        try {
+            $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
+            $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
+            $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+            
+            $result = $codeGenerator->editFile($filePath, $instruction);
+            
+            $this->climate->out("\r" . str_repeat(' ', 50) . "\r");
+            
+            if ($result['success']) {
+                $this->climate->green()->out('✅ Fichier modifié avec succès !');
+                $this->climate->white()->out('📁 ' . $result['file_modified']);
+                $this->climate->dim()->out('💾 Backup: ' . $result['backup_created']);
+            } else {
+                $this->climate->error('❌ Erreur: ' . $result['error']);
+            }
+            
+        } catch (\Exception $e) {
+            $this->climate->out('');
+            $this->climate->error('❌ Erreur: ' . $e->getMessage());
+        }
+        
+        $this->climate->out('');
+    }
+
+    /**
+     * Analyser un fichier
+     */
+    private function handleAnalyzeFile(string $filePath): void
+    {
+        if (empty($filePath)) {
+            $this->climate->error('❌ Usage: analyze-file "fichier.php"');
+            $this->climate->dim()->out('Exemple: analyze-file "app/Http/Controllers/UserController.php"');
+            return;
+        }
+        
+        $filePath = trim($filePath, '"');
+        
+        $this->climate->out('');
+        $this->climate->blue()->out('🔍 Analyse en cours...');
+        
+        try {
+            $analyzer = new \AssistantPhp\Services\ProjectAnalyzer($this->currentPath);
+            $fileManager = new \AssistantPhp\Services\FileManager($this->currentPath);
+            $codeGenerator = new \AssistantPhp\Services\CodeGenerator($analyzer, $fileManager, $this->ollama);
+            
+            $result = $codeGenerator->analyzeFile($filePath);
+            
+            if ($result['success']) {
+                $this->climate->green()->out('✅ Analyse terminée !');
+                $this->climate->white()->out('📁 ' . $result['file']);
+                $this->climate->out('');
+                $this->climate->yellow()->out('💡 Suggestions:');
+                $this->climate->white()->out($result['suggestions']);
+            } else {
+                $this->climate->error('❌ Erreur: ' . $result['error']);
+            }
+            
+        } catch (\Exception $e) {
+            $this->climate->error('❌ Erreur: ' . $e->getMessage());
+        }
+        
+        $this->climate->out('');
+    }
+
+
+    /**
+ * Scanner le projet automatiquement
+ */
+private function scanProject(): void
+{
+    $this->climate->out('');
+    $this->climate->blue()->out('🔍 Scanning project...');
+    
+    // Détection du framework
+    $framework = $this->detectFramework();
+    if ($framework) {
+        $this->climate->green()->out("✅ {$framework} detected");
+    } else {
+        $this->climate->yellow()->out("⚠️  No framework detected");
+    }
+    
+    // Compter les fichiers PHP
+    $phpFiles = $this->countPhpFiles();
+    $this->climate->green()->out("✅ {$phpFiles} PHP files found");
+    
+    // Détecter les modèles (si Laravel)
+    if ($framework === 'Laravel') {
+        $models = $this->findLaravelModels();
+        if (!empty($models)) {
+            $this->climate->green()->out("✅ " . count($models) . " models found: " . implode(', ', array_slice($models, 0, 5)) . (count($models) > 5 ? '...' : ''));
+        }
+        
+        $controllers = $this->findLaravelControllers();
+        if (!empty($controllers)) {
+            $this->climate->green()->out("✅ " . count($controllers) . " controllers found");
+        }
     }
     
     $this->climate->out('');
+    $this->climate->green()->out("✅ Ready! Context loaded.");
+    $this->climate->out('');
+}
+
+/**
+ * Compter les fichiers PHP
+ */
+private function countPhpFiles(): int
+{
+    $count = 0;
+    $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->currentPath));
+    
+    foreach ($iterator as $file) {
+        if ($file->getExtension() === 'php' && !str_contains($file->getPath(), 'vendor')) {
+            $count++;
+        }
+    }
+    
+    return $count;
+}
+
+/**
+ * Trouver les modèles Laravel
+ */
+private function findLaravelModels(): array
+{
+    $models = [];
+    $modelsPath = $this->currentPath . '/app/Models';
+    
+    if (is_dir($modelsPath)) {
+        $files = scandir($modelsPath);
+        foreach ($files as $file) {
+            if (pathinfo($file, PATHINFO_EXTENSION) === 'php') {
+                $models[] = pathinfo($file, PATHINFO_FILENAME);
+            }
+        }
+    }
+    
+    return $models;
+}
+
+/**
+ * Trouver les controllers Laravel
+ */
+private function findLaravelControllers(): array
+{
+    $controllers = [];
+    $controllersPath = $this->currentPath . '/app/Http/Controllers';
+    
+    if (is_dir($controllersPath)) {
+        $files = scandir($controllersPath);
+        foreach ($files as $file) {
+            if (pathinfo($file, PATHINFO_EXTENSION) === 'php' && $file !== 'Controller.php') {
+                $controllers[] = pathinfo($file, PATHINFO_FILENAME);
+            }
+        }
+    }
+    
+    return $controllers;
 }
 
 }

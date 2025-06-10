@@ -6,8 +6,9 @@ return [
     
     'ollama' => [
         'host' => 'http://147.93.47.47:11434',
-        'model' => 'qwen2.5-coder:1.5b',
-        'timeout' => 30,
+        'model' => 'qwen2.5-coder:3b',
+
+        'timeout' => 120,
         'temperature' => 0.3,
         'max_tokens' => 3000,  // ← Mettre ça !
 
